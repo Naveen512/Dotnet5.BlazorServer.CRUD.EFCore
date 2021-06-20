@@ -1,0 +1,154 @@
+@page "/"
+@inject MyWorldDbContext _myWorldDbContext;
+@inject IJSRuntime _jsRuntime;
+
+<button class="btn btn-primary" @onclick='@(e => CreateOrUpdateOpenModal(0))'>Add</button>
+<div>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th scope="col">Id</th>
+                <th scope="col">Product Name</th>
+                <th scope="col">Brand</th>
+                <th scope="col">Cost</th>
+                <th scope="col">Type</th>
+                <th scope="col">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in AllGadgets)
+            {
+                <tr>
+                    <th scope="row">@item.Id</th>
+                    <td>@item.ProductName</td>
+                    <td>@item.Brand</td>
+                    <td>@item.Cost</td>
+                    <td>@item.Type</td>
+                    <td>
+                        <button class="btn btn-primary" @onclick='@(e => CreateOrUpdateOpenModal(item.Id))'>Edit</button> |
+                        <button class="btn btn-danger"
+                        @onclick='@(e => OpenDeleteConfrimationModal(item.Id))'>Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+
+<div class="modal fade" id="createOrupdateModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@CreateOrUpdateTitle</h5>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="txtProductName" class="form-label">Product Name</label>
+                    <input @bind="FormPayload.ProductName" type="text" class="form-control" id="txtProductName">
+                </div>
+                <div class="mb-3">
+                    <label for="txtBrand" class="form-label">Brand</label>
+                    <input @bind="FormPayload.Brand" type="text" class="form-control" id="txtBrand">
+                </div>
+                <div class="mb-3">
+                    <label for="txtCost" class="form-label">Cost</label>
+                    <input @bind="FormPayload.Cost" type="text" class="form-control" id="txtCost">
+                </div>
+                <div class="mb-3">
+                    <label for="txtType" class="form-label">Type</label>
+                    <input @bind="FormPayload.Type" type="text" class="form-control" id="txtType">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary"
+                    @onclick='@(e => CloseModal("global.closeModal", "createOrupdateModal"))'
+                    data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-success" @onclick="Save">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteGadgetModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+
+            <div class="modal-body">
+                <h4>Are you sure, you want to delete?</h4>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary"
+                    @onclick='@(e => CloseModal("global.closeModal", "deleteGadgetModal"))'
+                    data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-danger" @onclick='ConfirmDelete'>Confirm Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+
+    public List<Gadgets> AllGadgets = new List<Gadgets>();
+
+    public Gadgets FormPayload = new Gadgets();
+    public string CreateOrUpdateTitle = string.Empty;
+
+    public int GadgetIdToRemove = 0;
+    protected override async Task OnInitializedAsync()
+    {
+        AllGadgets = await _myWorldDbContext.Gadgets.OrderByDescending(_ => _.Id).ToListAsync();
+    }
+
+    public async Task CreateOrUpdateOpenModal(int gadgetId)
+    {
+        if (gadgetId == 0)
+        {
+            CreateOrUpdateTitle = "Create A Gadget";
+            FormPayload = new Gadgets();
+        }
+        else
+        {
+            CreateOrUpdateTitle = "Update The Gadget";
+            FormPayload = await _myWorldDbContext.Gadgets.Where(_ => _.Id == gadgetId).FirstOrDefaultAsync();
+        }
+        await _jsRuntime.InvokeVoidAsync("global.openModal", "createOrupdateModal");
+    }
+
+    public async Task CloseModal(string jsMethodName, string popupHtmlId)
+    {
+        await _jsRuntime.InvokeVoidAsync(jsMethodName, popupHtmlId);
+    }
+
+    public async Task Save()
+    {
+        if (FormPayload.Id == 0)
+        {
+            _myWorldDbContext.Gadgets.Add(FormPayload);
+            await _myWorldDbContext.SaveChangesAsync();
+        }
+        else
+        {
+            _myWorldDbContext.Update(FormPayload);
+            await _myWorldDbContext.SaveChangesAsync();
+            AllGadgets = AllGadgets.Where(_ => _.Id != FormPayload.Id).ToList();
+        }
+        AllGadgets.Insert(0, FormPayload);
+        await CloseModal("global.closeModal", "createOrupdateModal");
+    }
+
+    public async Task OpenDeleteConfrimationModal(int gadgetId)
+    {
+        GadgetIdToRemove = gadgetId;
+        await _jsRuntime.InvokeVoidAsync("global.openModal", "deleteGadgetModal");
+    }
+
+    public async Task ConfirmDelete()
+    {
+        var gadtetToDelete = await _myWorldDbContext.Gadgets.Where(_ => _.Id == GadgetIdToRemove).FirstOrDefaultAsync();
+        _myWorldDbContext.Gadgets.Remove(gadtetToDelete);
+        await _myWorldDbContext.SaveChangesAsync();
+         AllGadgets = AllGadgets.Where(_ => _.Id != GadgetIdToRemove).ToList();
+        await CloseModal("global.closeModal", "deleteGadgetModal");
+    }
+}
